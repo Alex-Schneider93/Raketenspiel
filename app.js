@@ -1,5 +1,5 @@
 // ================================
-// SPIEL INITIALISIERUNG
+// SETUP
 // ================================
 const app = new PIXI.Application({
     resizeTo: window,
@@ -7,40 +7,46 @@ const app = new PIXI.Application({
 });
 document.body.appendChild(app.view);
 
-// UI Elemente
-const overlay = document.getElementById("overlay");
-const startBtn = document.getElementById("startBtn");
+document.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
 
-// Game Variablen
+// ================================
+// GAME STATE
+// ================================
+let running = false;
 let score = 0;
 let lives = 3;
-let gameRunning = false;
 let boss = null;
 let bossSpawned = false;
 
-const ufos = [];
-const bullets = [];
+let bullets = [];
+let ufos = [];
 
 // ================================
-// SPIELER (RAKETE)
+// OVERLAY
+// ================================
+const overlay = document.getElementById("overlay");
+const startBtn = document.getElementById("startBtn");
+
+// ================================
+// PLAYER
 // ================================
 const rocket = PIXI.Sprite.from("assets/rocket.png");
 rocket.anchor.set(0.5);
 rocket.scale.set(0.12);
 app.stage.addChild(rocket);
 
-function positionRocket() {
+function placeRocket() {
     rocket.x = app.renderer.width / 2;
     rocket.y = app.renderer.height - 80;
 }
-positionRocket();
-window.addEventListener("resize", positionRocket);
+placeRocket();
+window.addEventListener("resize", placeRocket);
 
 // ================================
-// HUD (Score + Leben)
+// HUD
 // ================================
 const hud = new PIXI.Text("Score: 0   Leben: 3", {
-    fill: "#ffffff",
+    fill: "#fff",
     fontSize: 26
 });
 hud.x = 20;
@@ -52,76 +58,74 @@ function updateHUD() {
 }
 
 // ================================
-// EXPLOSION ANIMATION
+// EXPLOSION
 // ================================
-function explode(x, y) {
-    const boom = new PIXI.Graphics();
-    let r = 5;
+function explosion(x, y) {
+    const g = new PIXI.Graphics();
+    let r = 1;
 
-    const timer = setInterval(() => {
-        boom.clear();
-        boom.beginFill(0xff3300, 1 - r / 60);
-        boom.drawCircle(x, y, r);
-        boom.endFill();
-        app.stage.addChild(boom);
-        r += 4;
-        if (r >= 60) {
-            clearInterval(timer);
-            app.stage.removeChild(boom);
+    const fx = setInterval(() => {
+        g.clear();
+        g.beginFill(0xff3300, 1 - r / 40);
+        g.drawCircle(x, y, r);
+        g.endFill();
+
+        app.stage.addChild(g);
+
+        r += 3;
+        if (r > 40) {
+            clearInterval(fx);
+            app.stage.removeChild(g);
         }
     }, 16);
 }
 
 // ================================
-// BULLETS
+// SHOOT
 // ================================
 function shoot() {
-    if (!gameRunning) return;
+    if (!running) return;
 
     const b = PIXI.Sprite.from("assets/bullet.png");
     b.anchor.set(0.5);
     b.scale.set(0.12);
     b.x = rocket.x;
-    b.y = rocket.y - 30;
+    b.y = rocket.y - 25;
     b.speed = 10;
 
     bullets.push(b);
     app.stage.addChild(b);
 }
 
-function spaceKeyPressed() {
-    shoot();
-}
-
 // ================================
-// GEGNER (UFOs)
+// UFO SPAWN
 // ================================
 function spawnUFO() {
-    if (!gameRunning) return;
+    if (!running) return;
 
     const u = PIXI.Sprite.from("assets/ufo1.png");
     u.anchor.set(0.5);
     u.scale.set(0.15);
-    u.x = random(40, app.renderer.width - 40);
-    u.y = -50;
-    u.speed = 2 + score / 20;
+    u.x = Math.random() * (app.renderer.width - 80) + 40;
+    u.y = -40;
+    u.speed = 2 + score * 0.05;
 
     ufos.push(u);
     app.stage.addChild(u);
 }
 
-setInterval(spawnUFO, 700);
+setInterval(spawnUFO, 800);
 
 // ================================
-// BOSS UFO
+// BOSS
 // ================================
 function spawnBoss() {
     boss = PIXI.Sprite.from("assets/ufo2.png");
     boss.anchor.set(0.5);
     boss.scale.set(0.35);
-    boss.hp = 30;
     boss.x = app.renderer.width / 2;
-    boss.y = 160;
+    boss.y = 150;
+    boss.hp = 25;
     app.stage.addChild(boss);
 }
 
@@ -130,15 +134,16 @@ function updateBoss() {
 
     boss.x += Math.sin(Date.now() / 500) * 3;
 
-    bullets.forEach((b) => {
-        if (isColliding(b, boss)) {
-            explode(b.x, b.y);
-            bullets.splice(bullets.indexOf(b), 1);
-            app.stage.removeChild(b);
+    let removeList = [];
 
+    bullets.forEach((b) => {
+        if (collide(b, boss)) {
+            explosion(b.x, b.y);
+            removeList.push(b);
             boss.hp--;
+
             if (boss.hp <= 0) {
-                explode(boss.x, boss.y);
+                explosion(boss.x, boss.y);
                 app.stage.removeChild(boss);
                 boss = null;
                 score += 40;
@@ -146,12 +151,17 @@ function updateBoss() {
             }
         }
     });
+
+    removeList.forEach(b => {
+        app.stage.removeChild(b);
+        bullets.splice(bullets.indexOf(b), 1);
+    });
 }
 
 // ================================
-// KOLLISION
+// COLLISION
 // ================================
-function isColliding(a, b) {
+function collide(a, b) {
     const A = a.getBounds();
     const B = b.getBounds();
     return A.x < B.x + B.width &&
@@ -163,80 +173,94 @@ function isColliding(a, b) {
 // ================================
 // GAME LOOP
 // ================================
-app.ticker.add(() => {
-    if (!gameRunning) return;
+setInterval(() => {
 
-    // Bullets bewegen
+    if (!running) return;
+
+    // movement keys
+    if (KEYS[37]) rocket.x -= 8;
+    if (KEYS[39]) rocket.x += 8;
+    if (KEYS[38]) rocket.y -= 8;
+    if (KEYS[40]) rocket.y += 8;
+    if (KEYS[32]) shoot();
+
+    // bullets
     bullets.forEach((b) => {
         b.y -= b.speed;
-        if (b.y < -20) {
-            bullets.splice(bullets.indexOf(b), 1);
-            app.stage.removeChild(b);
-        }
     });
 
-    // UFO bewegen + Kollisionen
+    bullets = bullets.filter(b => {
+        if (b.y < -50) {
+            app.stage.removeChild(b);
+            return false;
+        }
+        return true;
+    });
+
+    // ufos
     ufos.forEach((u) => {
         u.y += u.speed;
+    });
 
-        // Bullet trifft UFO
+    let newUFOs = [];
+
+    ufos.forEach((u) => {
+        // collision bullet -> ufo
+        let hit = false;
         bullets.forEach((b) => {
-            if (isColliding(b, u)) {
-                explode(u.x, u.y);
-                app.stage.removeChild(u);
+            if (collide(b, u)) {
+                hit = true;
+                explosion(u.x, u.y);
                 app.stage.removeChild(b);
-                ufos.splice(ufos.indexOf(u), 1);
-                bullets.splice(bullets.indexOf(b), 1);
-
-                score++;
-                updateHUD();
             }
         });
 
-        // UFO trifft Spieler
-        if (isColliding(u, rocket)) {
-            explode(rocket.x, rocket.y);
-            lives--;
-            updateHUD();
+        bullets = bullets.filter(b => !collide(b, u));
 
-            if (lives <= 0) {
-                gameOver();
-            }
-
+        if (hit) {
             app.stage.removeChild(u);
-            ufos.splice(ufos.indexOf(u), 1);
+            score++;
+            updateHUD();
+            return;
         }
 
-        // unten raus
-        if (u.y > app.renderer.height + 50) {
+        // collision ufo -> rocket
+        if (collide(u, rocket)) {
+            explosion(rocket.x, rocket.y);
             app.stage.removeChild(u);
-            ufos.splice(ufos.indexOf(u), 1);
+            lives--;
+            updateHUD();
+            if (lives <= 0) gameOver();
+            return;
+        }
+
+        // still alive? keep it
+        if (u.y < app.renderer.height + 50) {
+            newUFOs.push(u);
+        } else {
+            app.stage.removeChild(u);
         }
     });
 
-    // Boss logik
-    if (score >= 10 && !bossSpawned) {
+    ufos = newUFOs;
+
+    // BOSS
+    if (!bossSpawned && score >= 15) {
         spawnBoss();
         bossSpawned = true;
     }
+
     updateBoss();
-});
+
+}, 16);
 
 // ================================
-// PC STEUERUNG
+// TOUCH BUTTONS
 // ================================
-function leftKeyPressed()  { rocket.x -= 10; }
-function rightKeyPressed() { rocket.x += 10; }
-function upKeyPressed()    { rocket.y -= 10; }
-function downKeyPressed()  { rocket.y += 10; }
-
-// ================================
-// TOUCH CONTROLS
-// ================================
-document.getElementById("btnLeft").addEventListener("touchstart", () => rocket.x -= 20);
-document.getElementById("btnRight").addEventListener("touchstart", () => rocket.x += 20);
-document.getElementById("btnUp").addEventListener("touchstart", () => rocket.y -= 20);
-document.getElementById("btnDown").addEventListener("touchstart", () => rocket.y += 20);
+document.getElementById("btnLeft").addEventListener("touchstart", () => rocket.x -= 18);
+document.getElementById("btnRight").addEventListener("touchstart", () => rocket.x += 18);
+document.getElementById("btnUp").addEventListener("touchstart", () => rocket.y -= 18);
+document.getElementById("btnDown").addEventListener("touchstart", () => rocket.y += 18);
 document.getElementById("btnFire").addEventListener("touchstart", shoot);
 
 // ================================
@@ -248,34 +272,25 @@ startBtn.onclick = () => {
 };
 
 function startGame() {
+    running = true;
     score = 0;
     lives = 3;
+    bullets = [];
+    ufos = [];
+    boss = null;
     bossSpawned = false;
     updateHUD();
-    positionRocket();
-    gameRunning = true;
+    placeRocket();
 }
 
 function gameOver() {
-    gameRunning = false;
+    running = false;
 
     overlay.innerHTML = `
-        <h1 style="font-size:48px;">GAME OVER</h1>
-        <div id="retryBtn" style="background:#ff3333;padding:20px 40px;border-radius:15px;font-size:32px;cursor:pointer;">
-            🔁 Erneut spielen
-        </div>
+        <h1 style="font-size:50px;">GAME OVER</h1>
+        <div id="retryBtn" style="background:#ff3333;padding:18px 40px;font-size:32px;border-radius:15px;">🔁 Erneut spielen</div>
     `;
-
     overlay.style.display = "flex";
 
-    document.getElementById("retryBtn").onclick = () => {
-        overlay.innerHTML = `
-            <h1 style="font-size:48px;">SPACE ATTACK</h1>
-            <div id="startBtn">▶ Spiel Starten</div>
-        `;
-        document.getElementById("startBtn").onclick = () => {
-            overlay.style.display = "none";
-            startGame();
-        };
-    };
+    document.getElementById("retryBtn").onclick = () => location.reload();
 }
