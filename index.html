@@ -1,13 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rackettenspiel</title>
+    <title>Space Attack</title>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Overlay für Start + Game Over */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #startBtn, #retryBtn {
+            background: #ff3333;
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 32px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        /* Mobile Buttons */
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            z-index: 5;
+        }
+
+        .btn {
+            width: 65px;
+            height: 65px;
+            background: #444;
+            color: white;
+            border-radius: 15px;
+            text-align: center;
+            line-height: 65px;
+            font-size: 32px;
+            user-select: none;
+        }
+
+        @media (min-width: 800px) {
+            #controls { display: none; }
+        }
+    </style>
 </head>
 <body>
+
+    <!-- Start + Game Over Overlay -->
+    <div id="overlay">
+        <h1 style="font-size: 48px;">SPACE ATTACK</h1>
+        <div id="startBtn">▶ Spiel Starten</div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="controls">
+        <div class="btn" id="btnLeft">⬅️</div>
+        <div class="btn" id="btnRight">➡️</div>
+        <div class="btn" id="btnUp">⬆️</div>
+        <div class="btn" id="btnDown">⬇️</div>
+        <div class="btn" id="btnFire">🔥</div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.x/dist/pixi.min.js"></script>
-    <script src = "gameloop.js"></script>
+    <script src="gameloop.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
